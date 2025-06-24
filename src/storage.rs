@@ -19,9 +19,7 @@ pub struct StorageManager {
 impl StorageManager {
     pub fn new(config: Config, index: Box<dyn IndexStore>) -> Self {
         Self { config, index }
-    }
-
-    pub fn store_file(&mut self, file_path: &Path) -> Result<()> {
+    }    pub fn store_file(&mut self, file_path: &Path, delete_source: bool) -> Result<()> {
         if !file_path.exists() {
             return Err(anyhow::anyhow!("File does not exist: {}", file_path.display()));
         }
@@ -33,6 +31,11 @@ impl StorageManager {
         // 检查文件是否已经存储
         if self.index.get_file(file_path)?.is_some() {
             println!("File already stored: {}", file_path.display());
+            if delete_source {
+                fs::remove_file(file_path)
+                    .context("Failed to delete source file")?;
+                println!("Source file deleted: {}", file_path.display());
+            }
             return Ok(());
         }
 
@@ -60,11 +63,16 @@ impl StorageManager {
             file_size,
             compressed_size,
             created_at: chrono::Utc::now().to_rfc3339(),
-        };
-
-        // 添加到索引
+        };        // 添加到索引
         self.index.add_file(entry)
             .context("Failed to add file to index")?;
+
+        // 如果需要删除源文件
+        if delete_source {
+            fs::remove_file(file_path)
+                .context("Failed to delete source file")?;
+            println!("Source file deleted: {}", file_path.display());
+        }
 
         println!("File stored successfully: {}", file_path.display());
         println!("Compression ratio: {:.1}%", 
@@ -144,15 +152,20 @@ impl StorageManager {
 
         println!("File deleted from storage: {}", file_path.display());
         Ok(())
-    }
-
-    fn compress_file(&self, input_path: &Path, output_path: &Path) -> Result<u64> {
+    }    fn compress_file(&self, input_path: &Path, output_path: &Path) -> Result<u64> {
         let mut input_file = File::open(input_path)
             .context("Failed to open input file")?;
         let output_file = File::create(output_path)
             .context("Failed to create output file")?;
 
-        let mut encoder = GzEncoder::new(output_file, Compression::default());
+        // 设置压缩级别，考虑多线程配置
+        let compression_level = if self.config.multithread > 1 {
+            Compression::fast() // 多线程时使用快速压缩
+        } else {
+            Compression::default() // 单线程时使用默认压缩
+        };
+
+        let mut encoder = GzEncoder::new(output_file, compression_level);
         io::copy(&mut input_file, &mut encoder)
             .context("Failed to compress file")?;
 
@@ -181,9 +194,7 @@ impl StorageManager {
             .context("Failed to decompress file")?;
 
         Ok(())
-    }
-
-    pub fn store_files_from_list(&mut self, list_file: &Path) -> Result<()> {
+    }    pub fn store_files_from_list(&mut self, list_file: &Path, delete_source: bool) -> Result<()> {
         let content = fs::read_to_string(list_file)
             .context("Failed to read file list")?;
 
@@ -225,15 +236,19 @@ impl StorageManager {
                     all_files.push(file_path);
                 }
             }
-        }
-
-        // 应用排除模式
+        }        // 应用排除模式
         let filtered_files = self.apply_exclude_patterns(all_files, &exclude_patterns)?;
 
-        // 存储过滤后的文件
-        for file_path in filtered_files {
-            if let Err(e) = self.store_file(&file_path) {
-                eprintln!("Failed to store {}: {}", file_path.display(), e);
+        // 如果启用多线程且文件数量足够
+        if self.config.multithread > 1 && filtered_files.len() > 1 {
+            // 使用多线程处理
+            self.store_files_parallel(filtered_files, delete_source)?;
+        } else {
+            // 使用单线程顺序处理
+            for file_path in filtered_files {
+                if let Err(e) = self.store_file(&file_path, delete_source) {
+                    eprintln!("Failed to store {}: {}", file_path.display(), e);
+                }
             }
         }
 
@@ -282,15 +297,19 @@ impl StorageManager {
                     all_files.push(file_path);
                 }
             }
-        }
-
-        // 应用排除模式到已存储的文件
+        }        // 应用排除模式到已存储的文件
         let filtered_files = self.apply_exclude_patterns_to_stored(all_files, &exclude_patterns)?;
 
-        // 提取过滤后的文件
-        for file_path in filtered_files {
-            if let Err(e) = self.owe_file(&file_path) {
-                eprintln!("Failed to owe {}: {}", file_path.display(), e);
+        // 如果启用多线程且文件数量足够
+        if self.config.multithread > 1 && filtered_files.len() > 1 {
+            // 使用多线程处理
+            self.owe_files_parallel(filtered_files)?;
+        } else {
+            // 使用单线程顺序处理
+            for file_path in filtered_files {
+                if let Err(e) = self.owe_file(&file_path) {
+                    eprintln!("Failed to owe {}: {}", file_path.display(), e);
+                }
             }
         }
 
@@ -503,6 +522,195 @@ impl StorageManager {
         }
 
         println!("Extraction complete.");
+        Ok(())
+    }    // 多线程存储文件
+    fn store_files_parallel(&mut self, files: Vec<PathBuf>, delete_source: bool) -> Result<()> {
+        use rayon::prelude::*;
+        
+        // 设置全局线程池
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(self.config.multithread)
+            .build_global()
+            .unwrap_or_else(|_| {
+                // 如果全局线程池已存在，继续使用
+            });
+
+        let config = self.config.clone();
+        
+        // 并行处理文件
+        let results: Vec<Result<FileEntry>> = files
+            .par_iter()
+            .map(|file_path| {
+                Self::process_single_file_static(file_path, delete_source, &config)
+            })
+            .collect();
+
+        // 批量添加到索引
+        let mut success_count = 0;
+        for result in results {
+            match result {
+                Ok(entry) => {
+                    self.index.add_file(entry)?;
+                    success_count += 1;
+                }
+                Err(e) => {
+                    eprintln!("Failed to store file: {}", e);
+                }
+            }
+        }
+
+        println!("Stored {} files using {} threads", success_count, self.config.multithread);
+        Ok(())
+    }
+
+    // 静态方法处理单个文件存储（用于多线程）
+    fn process_single_file_static(file_path: &Path, delete_source: bool, config: &Config) -> Result<FileEntry> {
+        if !file_path.exists() {
+            return Err(anyhow::anyhow!("File does not exist: {}", file_path.display()));
+        }
+
+        if !file_path.is_file() {
+            return Err(anyhow::anyhow!("Path is not a file: {}", file_path.display()));
+        }
+
+        // 生成唯一ID和存储路径
+        let id = Uuid::new_v4().to_string();
+        let stored_filename = format!("{}.gz", id);
+        let stored_path = config.storage_path.join(&stored_filename);
+
+        // 确保存储目录存在
+        fs::create_dir_all(&config.storage_path)
+            .context("Failed to create storage directory")?;
+
+        // 获取原始文件大小
+        let file_size = fs::metadata(file_path)?.len();
+
+        // 压缩并存储文件
+        let compressed_size = Self::compress_file_static(file_path, &stored_path, config)
+            .context("Failed to compress file")?;
+
+        // 如果需要删除源文件
+        if delete_source {
+            fs::remove_file(file_path)
+                .context("Failed to delete source file")?;
+        }
+
+        // 创建索引条目
+        let entry = FileEntry {
+            id,
+            original_path: file_path.to_path_buf(),
+            stored_path,
+            file_size,
+            compressed_size,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        println!("File stored successfully: {} (compression: {:.1}%)", 
+                 file_path.display(),
+                 (compressed_size as f64 / file_size as f64) * 100.0);
+
+        Ok(entry)
+    }
+
+    // 静态压缩文件方法
+    fn compress_file_static(input_path: &Path, output_path: &Path, config: &Config) -> Result<u64> {
+        let mut input_file = File::open(input_path)
+            .context("Failed to open input file")?;
+        let output_file = File::create(output_path)
+            .context("Failed to create output file")?;
+
+        // 设置压缩级别，考虑多线程配置
+        let compression_level = if config.multithread > 1 {
+            Compression::fast() // 多线程时使用快速压缩
+        } else {
+            Compression::default() // 单线程时使用默认压缩
+        };
+
+        let mut encoder = GzEncoder::new(output_file, compression_level);
+        io::copy(&mut input_file, &mut encoder)
+            .context("Failed to compress file")?;
+
+        encoder.finish()
+            .context("Failed to finalize compression")?;
+
+        let compressed_size = fs::metadata(output_path)?.len();
+        Ok(compressed_size)
+    }
+
+    // 多线程提取文件
+    fn owe_files_parallel(&mut self, files: Vec<PathBuf>) -> Result<()> {
+        use rayon::prelude::*;
+          // 设置全局线程池
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(self.config.multithread)
+            .build_global()
+            .unwrap_or_else(|_| {
+                // 如果全局线程池已存在，继续使用
+            });
+
+        // 先获取所有文件的索引条目
+        let mut entries = Vec::new();
+        for file_path in &files {
+            if let Some(entry) = self.index.get_file(file_path)? {
+                entries.push(entry);
+            }
+        }
+
+        // 并行处理文件解压
+        let results: Vec<Result<PathBuf>> = entries
+            .par_iter()
+            .map(|entry| {
+                Self::decompress_file_static(&entry.stored_path, &entry.original_path)
+                    .map(|_| entry.original_path.clone())
+            })
+            .collect();
+
+        // 批量处理结果
+        let mut success_count = 0;
+        for (i, result) in results.into_iter().enumerate() {
+            match result {
+                Ok(file_path) => {
+                    // 删除压缩的存储文件
+                    if let Err(e) = fs::remove_file(&entries[i].stored_path) {
+                        eprintln!("Failed to remove stored file {}: {}", entries[i].stored_path.display(), e);
+                    }
+                    
+                    // 从索引中移除
+                    if let Err(e) = self.index.remove_file(&file_path) {
+                        eprintln!("Failed to remove from index {}: {}", file_path.display(), e);
+                    } else {
+                        success_count += 1;
+                        println!("File extracted successfully: {}", file_path.display());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to extract file: {}", e);
+                }
+            }
+        }
+
+        println!("Extracted {} files using {} threads", success_count, self.config.multithread);
+        Ok(())
+    }
+
+    // 静态解压文件方法
+    fn decompress_file_static(input_path: &Path, output_path: &Path) -> Result<()> {
+        let input_file = File::open(input_path)
+            .context("Failed to open compressed file")?;
+        let mut decoder = GzDecoder::new(input_file);
+
+        // 确保输出目录存在
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .context("Failed to create output directory")?;
+        }
+
+        let mut output_file = File::create(output_path)
+            .context("Failed to create output file")?;
+
+        io::copy(&mut decoder, &mut output_file)
+            .context("Failed to decompress file")?;
+
         Ok(())
     }
 }

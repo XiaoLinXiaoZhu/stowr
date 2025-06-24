@@ -44,21 +44,28 @@ stowr config --list
 可配置项有：
 - `storage.path`：指定存储文件的路径。
 - `index.mode`：指定索引模式，可选择为 `auto`、`json` 或 `sqlite` 作为索引库的实现方式。auto模式下会根据存储的文件数量切换索引方式。当存储文件数目小于 1000 时，使用 `json` 模式；当存储文件数目大于等于 1000 时，使用 `sqlite` 模式。
+- `multithread`：指定多线程数量（默认值1），用于控制压缩和解压操作时启用的线程数量。当设置大于1时，批量操作将使用多线程并行处理以提升性能。
 
 #### 2. **store** — 存储文件
 
 ```bash
 stowr store <file>
 stowr store --list <file>
+stowr store --del <file>
+stowr store --list <file> --del
 ```
 
 - 将指定文件存储到系统中。
 - 若使用 `--list`，则读取 `<file>` 中列出的所有路径并依次存储。
+- 若使用 `--del`，则在存储完成后删除源文件。
 - **支持通配符模式**：在文件列表中可以使用通配符模式匹配多个文件。
+- **支持多线程处理**：当配置了 multithread > 1 且批量操作时，自动启用多线程并行处理。
 - 示例：
   ```bash
   stowr store notes.txt
   stowr store --list file_list.txt
+  stowr store notes.txt --del
+  stowr store --list file_list.txt --del
   ```
 
 **通配符支持：**
@@ -97,6 +104,7 @@ stowr owe --all
 - 若使用 `--list`，则提取列表中的所有文件。
 - **支持通配符模式**：在文件列表中可以使用通配符模式匹配已存储的文件。
 - **支持排除模式**：在文件列表中以 `!` 开头的行可以排除特定文件。
+- **支持多线程处理**：当配置了 multithread > 1 且批量操作时，自动启用多线程并行处理。
 - 若使用 `--all`，则提取所有已存储的文件。
 - 示例：
   ```bash

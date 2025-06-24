@@ -26,15 +26,17 @@ pub enum Commands {
         /// List all configuration settings
         #[arg(long)]
         list: bool,
-    },
-    /// Store files in the system
+    },    /// Store files in the system
     Store {
         /// File to store
         file: Option<PathBuf>,
         /// Read file paths from a list file
         #[arg(long)]
         list: Option<PathBuf>,
-    },    /// Extract files from storage (owe)
+        /// Delete source files after storing
+        #[arg(long)]
+        del: bool,
+    },/// Extract files from storage (owe)
     Owe {
         /// File to extract
         file: Option<PathBuf>,
@@ -74,10 +76,9 @@ pub fn handle_command(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Config { key, value, list } => {
             handle_config(key, value, list)
-        }
-        Commands::Store { file, list } => {
-            handle_store(file, list)
-        }        Commands::Owe { file, list, all } => {
+        }        Commands::Store { file, list, del } => {
+            handle_store(file, list, del)
+        }Commands::Owe { file, list, all } => {
             handle_owe(file, list, all)
         }
         Commands::Rename { old_name, new_name } => {
@@ -133,17 +134,17 @@ fn handle_config(key: Option<String>, value: Option<String>, list: bool) -> Resu
     Ok(())
 }
 
-fn handle_store(file: Option<PathBuf>, list: Option<PathBuf>) -> Result<()> {
+fn handle_store(file: Option<PathBuf>, list: Option<PathBuf>, delete_source: bool) -> Result<()> {
     let config = Config::load()?;
     let index = create_index(&config)?;
     let mut storage = StorageManager::new(config, index);
 
     match (file, list) {
         (Some(f), None) => {
-            storage.store_file(&f)?;
+            storage.store_file(&f, delete_source)?;
         }
         (None, Some(l)) => {
-            storage.store_files_from_list(&l)?;
+            storage.store_files_from_list(&l, delete_source)?;
         }
         _ => {
             println!("Usage: stowr store <file> or stowr store --list <file>");

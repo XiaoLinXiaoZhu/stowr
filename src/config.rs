@@ -7,6 +7,12 @@ use std::path::PathBuf;
 pub struct Config {
     pub storage_path: PathBuf,
     pub index_mode: IndexMode,
+    #[serde(default = "default_multithread")]
+    pub multithread: usize,
+}
+
+fn default_multithread() -> usize {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,10 +24,10 @@ pub enum IndexMode {
 
 impl Default for Config {
     fn default() -> Self {
-        let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        Self {
+        let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));        Self {
             storage_path: home_dir.join(".stowr").join("storage"),
             index_mode: IndexMode::Auto,
+            multithread: 1,
         }
     }
 }
@@ -69,9 +75,7 @@ impl Config {
         let home_dir = dirs::home_dir()
             .context("Failed to get home directory")?;
         Ok(home_dir.join(".stowr").join("config.json"))
-    }
-
-    pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
+    }    pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "storage.path" => {
                 self.storage_path = PathBuf::from(value);
@@ -84,15 +88,21 @@ impl Config {
                     _ => return Err(anyhow::anyhow!("Invalid index mode. Valid values: auto, json, sqlite")),
                 };
             }
+            "multithread" => {
+                self.multithread = value.parse::<usize>()
+                    .map_err(|_| anyhow::anyhow!("Invalid multithread value. Must be a positive number"))?;
+                if self.multithread == 0 {
+                    return Err(anyhow::anyhow!("Multithread value must be greater than 0"));
+                }
+            }
             _ => return Err(anyhow::anyhow!("Unknown config key: {}", key)),
         }
         Ok(())
-    }
-
-    pub fn list(&self) -> Vec<(String, String)> {
+    }    pub fn list(&self) -> Vec<(String, String)> {
         vec![
             ("storage.path".to_string(), self.storage_path.display().to_string()),
             ("index.mode".to_string(), format!("{:?}", self.index_mode).to_lowercase()),
+            ("multithread".to_string(), self.multithread.to_string()),
         ]
     }
 }
