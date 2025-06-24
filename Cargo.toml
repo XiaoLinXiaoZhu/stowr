@@ -3,6 +3,11 @@ name = "stowr"
 version = "0.1.0"
 edition = "2021"
 
+description = "A simple CLI tool for file management, including compressing, extracting, renaming, and organizing files."
+homepage = "https://github.com/XiaoLinXiaoZhu/stowr"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/XiaoLinXiaoZhu/stowr"
+
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
