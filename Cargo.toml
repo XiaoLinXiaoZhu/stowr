@@ -1,6 +1,6 @@
 [package]
 name = "stowr"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 description = "A simple CLI tool for file management, including compressing, extracting, renaming, and organizing files."
