@@ -30,8 +30,8 @@ pub enum IndexMode {
 
 impl Default for Config {
     fn default() -> Self {
-        let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));        Self {
-            storage_path: home_dir.join(".stowr").join("storage"),
+        Self {
+            storage_path: PathBuf::from(".stowr").join("storage"),
             index_mode: IndexMode::Auto,
             multithread: 1,
             compression_level: 6,
@@ -76,13 +76,9 @@ impl Config {
             .context("Failed to write config file")?;
 
         Ok(())
-    }
-
-    pub fn config_path() -> Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .context("Failed to get home directory")?;
-        Ok(home_dir.join(".stowr").join("config.json"))
-    }    pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
+    }    pub fn config_path() -> Result<PathBuf> {
+        Ok(PathBuf::from(".stowr").join("config.json"))
+    }pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "storage.path" => {
                 self.storage_path = PathBuf::from(value);
