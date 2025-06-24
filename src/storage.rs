@@ -104,6 +104,31 @@ impl StorageManager {
         self.index.list_files()
     }
 
+    pub fn search_files(&self, pattern: &str) -> Result<Vec<FileEntry>> {
+        let all_files = self.index.list_files()?;
+        let mut matching_files = Vec::new();
+
+        // 创建glob模式匹配器
+        for file_entry in all_files {
+            // 将路径转换为字符串进行匹配
+            let path_str = file_entry.original_path.to_string_lossy();
+            
+            // 使用glob模式匹配
+            if let Ok(matcher) = glob::Pattern::new(pattern) {
+                if matcher.matches(&path_str) {
+                    matching_files.push(file_entry);
+                }
+            } else {
+                // 如果不是有效的glob模式，进行简单的字符串匹配
+                if path_str.contains(pattern) {
+                    matching_files.push(file_entry);
+                }
+            }
+        }
+
+        Ok(matching_files)
+    }
+
     pub fn rename_file(&mut self, old_path: &Path, new_path: &Path) -> Result<()> {
         if self.index.get_file(old_path)?.is_none() {
             return Err(anyhow::anyhow!("File not found in storage: {}", old_path.display()));

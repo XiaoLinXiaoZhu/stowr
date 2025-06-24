@@ -182,7 +182,30 @@ stowr list
 
 ---
 
-#### 8. **help** — 显示帮助信息
+#### 8. **search** — 搜索存储的文件
+
+```bash
+stowr search <pattern>
+```
+
+- 根据通配符模式搜索已存储的文件。
+- 支持标准通配符语法：
+  - `*` - 匹配任意字符序列
+  - `?` - 匹配单个字符
+  - `[abc]` - 匹配字符类中的任意一个字符
+  - `**` - 递归匹配目录（用于路径匹配）
+- 显示方式与 `list` 命令一致，包含文件大小、压缩率等信息。
+- 示例：
+  ```bash
+  stowr search "*.png"           # 搜索所有PNG图片
+  stowr search "**/*.log"        # 搜索所有日志文件
+  stowr search "document.?"      # 搜索类似document.x的文件
+  stowr search "*report*"        # 搜索包含report的文件
+  ```
+
+---
+
+#### 9. **help** — 显示帮助信息
 
 ```bash
 stowr help
@@ -196,7 +219,7 @@ stowr help
 
 ---
 
-#### 9. **version** — 显示版本信息
+#### 10. **version** — 显示版本信息
 
 ```bash
 stowr version

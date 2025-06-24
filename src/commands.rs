@@ -65,9 +65,13 @@ pub enum Commands {
     Delete {
         /// File to delete
         file: PathBuf,
-    },
-    /// List all stored files
+    },    /// List all stored files
     List,
+    /// Search for stored files using glob patterns
+    Search {
+        /// Glob pattern to search for
+        pattern: String,
+    },
     /// Show version information
     Version,
 }
@@ -89,9 +93,11 @@ pub fn handle_command(cli: Cli) -> Result<()> {
         }
         Commands::Delete { file } => {
             handle_delete(file)
-        }
-        Commands::List => {
+        }        Commands::List => {
             handle_list()
+        }
+        Commands::Search { pattern } => {
+            handle_search(pattern)
         }
         Commands::Version => {
             handle_version()
@@ -240,6 +246,39 @@ fn handle_list() -> Result<()> {
 fn handle_version() -> Result<()> {
     println!("stowr {}", env!("CARGO_PKG_VERSION"));
     println!("A dynamic file compression and storage tool");
+    Ok(())
+}
+
+fn handle_search(pattern: String) -> Result<()> {
+    let config = Config::load()?;
+    let index = create_index(&config)?;
+    let storage = StorageManager::new(config, index);
+
+    let files = storage.search_files(&pattern)?;
+    
+    if files.is_empty() {
+        println!("No files found matching pattern: {}", pattern);
+        return Ok(());
+    }
+
+    println!("Files matching pattern '{}' ({} found):", pattern, files.len());
+    println!("{:<50} {:<12} {:<12} {:<20}", "File", "Original", "Compressed", "Created");
+    println!("{}", "-".repeat(94));
+
+    for entry in files {
+        let compression_ratio = if entry.file_size > 0 {
+            format!("{:.1}%", (entry.compressed_size as f64 / entry.file_size as f64) * 100.0)
+        } else {
+            "N/A".to_string()
+        };
+
+        println!("{:<50} {:<12} {:<12} {:<20}", 
+                 entry.original_path.display(),
+                 format_bytes(entry.file_size),
+                 format!("{} ({})", format_bytes(entry.compressed_size), compression_ratio),
+                 entry.created_at.split('T').next().unwrap_or(&entry.created_at));
+    }
+
     Ok(())
 }
 
