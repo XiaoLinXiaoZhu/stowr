@@ -348,10 +348,8 @@ impl StorageManager {
         }
 
         Ok(matching_files)
-    }
-
-    /// 将通配符模式转换为正则表达式
-    fn glob_to_regex(&self, pattern: &str) -> Result<String> {
+    }    /// 将通配符模式转换为正则表达式
+    pub fn glob_to_regex(&self, pattern: &str) -> Result<String> {
         let mut regex = String::new();
         let chars: Vec<char> = pattern.chars().collect();
         let mut i = 0;

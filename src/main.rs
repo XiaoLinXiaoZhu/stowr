@@ -3,6 +3,9 @@ mod index;
 mod storage;
 mod commands;
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use clap::Parser;
 use commands::{Cli, handle_command};
