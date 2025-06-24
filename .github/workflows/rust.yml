@@ -96,12 +96,11 @@ jobs:
         else
           tar -czf "$archive_name" -C "target/${{ matrix.target }}/release" "${{ matrix.artifact_name }}"
         fi
-        
-        echo "Archive created: $archive_name"
+          echo "Archive created: $archive_name"
         ls -la "$archive_name"
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}
         path: ${{ matrix.asset_name }}.${{ matrix.archive_ext }}
@@ -111,12 +110,12 @@ jobs:
     name: Create Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest    
     steps:
     - uses: actions/checkout@v4
     
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: artifacts
     
