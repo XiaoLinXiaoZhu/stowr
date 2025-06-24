@@ -9,10 +9,16 @@ pub struct Config {
     pub index_mode: IndexMode,
     #[serde(default = "default_multithread")]
     pub multithread: usize,
+    #[serde(default = "default_compression_level")]
+    pub compression_level: u32,
 }
 
 fn default_multithread() -> usize {
     1
+}
+
+fn default_compression_level() -> u32 {
+    6  // flate2 的默认压缩级别，范围是0-9，6是默认值
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +34,7 @@ impl Default for Config {
             storage_path: home_dir.join(".stowr").join("storage"),
             index_mode: IndexMode::Auto,
             multithread: 1,
+            compression_level: 6,
         }
     }
 }
@@ -87,13 +94,20 @@ impl Config {
                     "sqlite" => IndexMode::Sqlite,
                     _ => return Err(anyhow::anyhow!("Invalid index mode. Valid values: auto, json, sqlite")),
                 };
-            }
-            "multithread" => {
+            }            "multithread" => {
                 self.multithread = value.parse::<usize>()
                     .map_err(|_| anyhow::anyhow!("Invalid multithread value. Must be a positive number"))?;
                 if self.multithread == 0 {
                     return Err(anyhow::anyhow!("Multithread value must be greater than 0"));
                 }
+            }
+            "compression.level" => {
+                let level = value.parse::<u32>()
+                    .map_err(|_| anyhow::anyhow!("Invalid compression level. Must be a number between 0-9"))?;
+                if level > 9 {
+                    return Err(anyhow::anyhow!("Compression level must be between 0-9"));
+                }
+                self.compression_level = level;
             }
             _ => return Err(anyhow::anyhow!("Unknown config key: {}", key)),
         }
@@ -103,6 +117,7 @@ impl Config {
             ("storage.path".to_string(), self.storage_path.display().to_string()),
             ("index.mode".to_string(), format!("{:?}", self.index_mode).to_lowercase()),
             ("multithread".to_string(), self.multithread.to_string()),
+            ("compression.level".to_string(), self.compression_level.to_string()),
         ]
     }
 }

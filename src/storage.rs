@@ -158,12 +158,8 @@ impl StorageManager {
         let output_file = File::create(output_path)
             .context("Failed to create output file")?;
 
-        // 设置压缩级别，考虑多线程配置
-        let compression_level = if self.config.multithread > 1 {
-            Compression::fast() // 多线程时使用快速压缩
-        } else {
-            Compression::default() // 单线程时使用默认压缩
-        };
+        // 使用配置中设置的压缩级别
+        let compression_level = Compression::new(self.config.compression_level);
 
         let mut encoder = GzEncoder::new(output_file, compression_level);
         io::copy(&mut input_file, &mut encoder)
@@ -610,21 +606,15 @@ impl StorageManager {
                  (compressed_size as f64 / file_size as f64) * 100.0);
 
         Ok(entry)
-    }
-
-    // 静态压缩文件方法
+    }    // 静态压缩文件方法
     fn compress_file_static(input_path: &Path, output_path: &Path, config: &Config) -> Result<u64> {
         let mut input_file = File::open(input_path)
             .context("Failed to open input file")?;
         let output_file = File::create(output_path)
             .context("Failed to create output file")?;
 
-        // 设置压缩级别，考虑多线程配置
-        let compression_level = if config.multithread > 1 {
-            Compression::fast() // 多线程时使用快速压缩
-        } else {
-            Compression::default() // 单线程时使用默认压缩
-        };
+        // 使用配置中设置的压缩级别
+        let compression_level = Compression::new(config.compression_level);
 
         let mut encoder = GzEncoder::new(output_file, compression_level);
         io::copy(&mut input_file, &mut encoder)
