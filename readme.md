@@ -1,5 +1,25 @@
 ## STOWR
 
+> **⚠️ 项目迁移通知**
+> 
+> 该项目已不再维护，并已迁移至新的架构：
+> 
+> ### Stowr Core
+> 
+> [![Crates.io](https://img.shields.io/crates/v/stowr-core.svg)](https://crates.io/crates/stowr-core)
+> [![Documentation](https://docs.rs/stowr-core/badge.svg)](https://docs.rs/stowr-core)
+> [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+> 
+> ### Stowr CLI
+> 
+> [![Crates.io](https://img.shields.io/crates/v/stowr-cli.svg)](https://crates.io/crates/stowr-cli)
+> [![Documentation](https://docs.rs/stowr-cli/badge.svg)](https://docs.rs/stowr-cli)
+> [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+> 
+> 请使用新的项目获取最新版本和持续更新。
+
+---
+
 ### 为什么叫做STOWR？
 
 STOWR是一个由“Store”和“Owe”,两个单词组合而成的名称。它能够实现动态的 压缩/解压 文件功能，实现小文件的优化存储。
